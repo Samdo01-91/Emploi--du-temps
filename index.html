@@ -12,6 +12,25 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
+<script>
+  // Diagnostic posé avant tout le reste : capte aussi bien les erreurs
+  // d'exécution que les échecs de chargement des scripts externes (CDN),
+  // pour éviter un écran bloqué sur "Chargement..." sans explication.
+  window.addEventListener('error', function (e) {
+    var el = document.getElementById('loading-fallback');
+    if (!el) return;
+    var detail = (e && e.message) ? e.message : ((e && e.target && e.target.src) ? "échec de chargement de " + e.target.src : "erreur inconnue");
+    el.innerHTML =
+      "<div style='color:#B94A3F; text-align:left; max-width:90vw; font-family:sans-serif;'><strong>Erreur technique :</strong><br/>" + detail + "</div>";
+  }, true);
+  setTimeout(function () {
+    var el = document.getElementById('loading-fallback');
+    if (el && el.textContent.indexOf("Chargement") !== -1) {
+      el.innerHTML = "Le chargement prend plus de temps que prévu.<br/>Vérifiez votre connexion Internet (essayez en Wi-Fi) puis rafraîchissez la page.<br/>Si rien ne change, il s'agit probablement d'une erreur technique à corriger.";
+    }
+  }, 9000);
+</script>
+
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -25,10 +44,11 @@
 </head>
 <body>
 <div id="root">
-  <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; font-family: sans-serif; color:#5B6B85;">
+  <div id="loading-fallback" style="min-height:100vh; display:flex; align-items:center; justify-content:center; font-family: sans-serif; color:#5B6B85; text-align:center; padding:24px; box-sizing:border-box;">
     Chargement de l'application…
   </div>
 </div>
+
 
 <script>
   // Remplace le stockage propre aux artefacts Claude par le stockage local
