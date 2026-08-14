@@ -13,20 +13,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
 <script>
-  // Diagnostic posé avant tout le reste : capte aussi bien les erreurs
-  // d'exécution que les échecs de chargement des scripts externes (CDN),
-  // pour éviter un écran bloqué sur "Chargement..." sans explication.
+  // Diagnostic pose avant tout le reste : capte aussi bien les erreurs
+  // d'execution que les echecs de chargement des scripts externes (CDN),
+  // pour eviter un ecran bloque sur "Chargement..." sans explication.
   window.addEventListener('error', function (e) {
     var el = document.getElementById('loading-fallback');
     if (!el) return;
-    var detail = (e && e.message) ? e.message : ((e && e.target && e.target.src) ? "échec de chargement de " + e.target.src : "erreur inconnue");
+    var detail = (e && e.message) ? e.message : ((e && e.target && e.target.src) ? "echec de chargement de " + e.target.src : "erreur inconnue");
     el.innerHTML =
       "<div style='color:#B94A3F; text-align:left; max-width:90vw; font-family:sans-serif;'><strong>Erreur technique :</strong><br/>" + detail + "</div>";
   }, true);
   setTimeout(function () {
     var el = document.getElementById('loading-fallback');
     if (el && el.textContent.indexOf("Chargement") !== -1) {
-      el.innerHTML = "Le chargement prend plus de temps que prévu.<br/>Vérifiez votre connexion Internet (essayez en Wi-Fi) puis rafraîchissez la page.<br/>Si rien ne change, il s'agit probablement d'une erreur technique à corriger.";
+      el.innerHTML = "Le chargement prend plus de temps que prevu.<br/>Verifiez votre connexion Internet (essayez en Wi-Fi) puis rafraichissez la page.<br/>Si rien ne change, il s'agit probablement d'une erreur technique a corriger.";
     }
   }, 9000);
 </script>
@@ -34,7 +34,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" />
 
 <style>
   body { margin: 0; }
@@ -49,10 +49,9 @@
   </div>
 </div>
 
-
 <script>
   // Remplace le stockage propre aux artefacts Claude par le stockage local
-  // du navigateur, pour que l'application fonctionne une fois hébergée
+  // du navigateur, pour que l'application fonctionne une fois hebergee
   // en dehors de Claude (GitHub Pages, Vercel, Netlify, etc.).
   window.storage = {
     async get(key, shared) {
