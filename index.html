@@ -190,6 +190,39 @@ function blockLabel(timeSlots, startIdx, duration) {
   return `${start} – ${end}`;
 }
 
+// Mesure la largeur réelle du texte (via Canvas, avec la même police que le
+// rendu final) pour calculer une taille de police qui remplit la page sans
+// jamais déborder, quelle que soit la longueur du nom de la classe.
+function macaronFontSize(name) {
+  const availableWidthMm = 260;
+  const maxSizeMm = 95;
+  const minSizeMm = 20;
+  try {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.font = "800 100px Inter, sans-serif";
+    const width100 = ctx.measureText(name).width;
+    if (!width100) return 60;
+    const ratio = width100 / 100;
+    let size = availableWidthMm / ratio;
+    size = Math.min(size, maxSizeMm);
+    size = Math.max(size, minSizeMm);
+    return size;
+  } catch (e) {
+    return 50;
+  }
+}
+
+function renderMacaron(cls, est) {
+  return (
+    <div className="macaron-page" id={`macaron-page-${cls.id}`}>
+      <div className="macaron-text" style={{ fontSize: `${macaronFontSize(cls.name)}mm` }}>
+        {cls.name}
+      </div>
+    </div>
+  );
+}
+
 function compactLabel(label) {
   return label.replace(/\s*–\s*/, "-").replace(/\s+/g, "");
 }
@@ -290,6 +323,10 @@ function TimetableApp() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printSelected, setPrintSelected] = useState(["c1"]);
+  const [macaronOpen, setMacaronOpen] = useState(false);
+  const [macaronSelected, setMacaronSelected] = useState([]);
+  const [macaronPdfGenerating, setMacaronPdfGenerating] = useState(false);
+  const [macaronPdfError, setMacaronPdfError] = useState(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [newEstablishmentName, setNewEstablishmentName] = useState("");
@@ -558,8 +595,57 @@ function TimetableApp() {
     e.target.value = "";
   }
 
+  function setPrintPageSize(orientation) {
+    let styleEl = document.getElementById("dynamic-page-size");
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = "dynamic-page-size";
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `@page { size: A4 ${orientation}; margin: 0; }`;
+  }
+
   function launchPrint() {
+    document.body.classList.remove("print-mode-macarons");
+    document.body.classList.add("print-mode-schedule");
+    setPrintPageSize("portrait");
     window.print();
+  }
+
+  function launchMacaronPrint() {
+    document.body.classList.remove("print-mode-schedule");
+    document.body.classList.add("print-mode-macarons");
+    setPrintPageSize("landscape");
+    window.print();
+  }
+
+  function toggleMacaronClass(id) {
+    setMacaronSelected((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+  }
+
+  async function downloadMacaronsPdf() {
+    if (macaronSelected.length === 0) return;
+    setMacaronPdfError(null);
+    setMacaronPdfGenerating(true);
+    try {
+      await ensurePdfLibsLoaded();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+      for (let i = 0; i < macaronSelected.length; i++) {
+        const id = macaronSelected[i];
+        const node = document.getElementById(`macaron-page-${id}`);
+        if (!node) continue;
+        const canvas = await window.html2canvas(node, { scale: 2, backgroundColor: "#ffffff" });
+        const imgData = canvas.toDataURL("image/png");
+        if (i > 0) doc.addPage();
+        doc.addImage(imgData, "PNG", 0, 0, 297, 210);
+      }
+      doc.save("macarons-classes.pdf");
+    } catch (e) {
+      setMacaronPdfError("Le téléchargement a échoué. Vérifiez votre connexion et réessayez.");
+    } finally {
+      setMacaronPdfGenerating(false);
+    }
   }
 
   const printPairs = [];
@@ -695,12 +781,51 @@ function TimetableApp() {
         .print-signature { text-align: center; width: 40mm; }
         .print-signature-line { border-top: 1px solid #23324D; margin-bottom: 3px; }
         .print-signature-label { font-family: 'Kalam', cursive; font-size: 10px; color: #23324D; }
-        @page { size: A4 portrait; margin: 0; }
+        .print-only-schedule, .print-only-macarons {
+          position: absolute;
+          top: 0;
+          left: -10000px;
+          background: #fff;
+        }
+        .print-only-schedule { width: 210mm; }
+        .print-only-macarons { width: 297mm; }
+        .macaron-page {
+          width: 297mm;
+          height: 210mm;
+          box-sizing: border-box;
+          padding: 15mm;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          position: relative;
+        }
+        .macaron-school {
+          position: absolute;
+          top: 12mm;
+          font-family: 'Inter', sans-serif;
+          font-size: 14px;
+          font-weight: 500;
+          color: #9AA7BD;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .macaron-text {
+          font-family: 'Inter', sans-serif;
+          font-weight: 800;
+          color: #000000;
+          text-align: center;
+          line-height: 1.05;
+          white-space: nowrap;
+        }
         @media print {
           .screen-only { display: none !important; }
-          .print-only { position: static !important; left: 0; top: 0; width: auto; }
-          .print-page { page-break-after: always; }
-          .print-page:last-child { page-break-after: auto; }
+          .print-only-schedule, .print-only-macarons { display: none !important; position: static !important; left: 0; top: 0; width: auto; }
+          body.print-mode-schedule .print-only-schedule { display: block !important; }
+          body.print-mode-macarons .print-only-macarons { display: block !important; }
+          .print-page, .macaron-page { page-break-after: always; }
+          .print-page:last-child, .macaron-page:last-child { page-break-after: auto; }
         }
       `}</style>
 
@@ -732,7 +857,7 @@ function TimetableApp() {
                 {saveStatus === "saving" ? "Enregistrement…" : saveStatus === "saved" ? "Enregistré" : ""}
               </span>
               <button
-                onClick={() => { setPrintOpen((v) => !v); setPanelOpen(false); }}
+                onClick={() => { setPrintOpen((v) => !v); setPanelOpen(false); setMacaronOpen(false); }}
                 className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition"
                 style={{
                   background: printOpen ? "#23324D" : "#FFFFFF",
@@ -744,7 +869,19 @@ function TimetableApp() {
                 Imprimer
               </button>
               <button
-                onClick={() => { setPanelOpen((v) => !v); setPrintOpen(false); }}
+                onClick={() => { setMacaronOpen((v) => !v); setPanelOpen(false); setPrintOpen(false); }}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition"
+                style={{
+                  background: macaronOpen ? "#23324D" : "#FFFFFF",
+                  color: macaronOpen ? "#FFFFFF" : "#23324D",
+                  border: "1px solid #C9D6E3",
+                }}
+              >
+                <span style={{ fontSize: 15 }}>🏷</span>
+                Macarons
+              </button>
+              <button
+                onClick={() => { setPanelOpen((v) => !v); setPrintOpen(false); setMacaronOpen(false); }}
                 className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition"
                 style={{
                   background: panelOpen ? "#23324D" : "#FFFFFF",
@@ -799,6 +936,54 @@ function TimetableApp() {
               </div>
               {pdfError && (
                 <p className="text-xs mt-2" style={{ color: "#B94A3F" }}>{pdfError}</p>
+              )}
+            </div>
+          )}
+
+          {/* Macaron panel */}
+          {macaronOpen && (
+            <div className="mb-6 rounded-xl p-5" style={{ background: "#FFFFFF", border: "1px solid #C9D6E3" }}>
+              <h3 className="font-display text-lg mb-1" style={{ color: "#23324D" }}>Macarons de porte</h3>
+              <p className="text-xs mb-3" style={{ color: "#5B6B85" }}>
+                Une feuille A4 en paysage par classe, avec le nom en grand et en noir — à coller à l'entrée de chaque salle. Classes de « {activeEstablishment.name || "cet établissement"} ».
+              </p>
+              <div className="flex flex-col gap-1.5 mb-4">
+                {establishmentClasses.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "#23324D" }}>
+                    <input
+                      type="checkbox"
+                      checked={macaronSelected.includes(c.id)}
+                      onChange={() => toggleMacaronClass(c.id)}
+                    />
+                    {c.name}
+                  </label>
+                ))}
+                {establishmentClasses.length === 0 && (
+                  <p className="text-xs" style={{ color: "#9AA7BD" }}>Aucune classe dans cet établissement.</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={launchMacaronPrint}
+                  disabled={macaronSelected.length === 0}
+                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-40"
+                  style={{ background: "#23324D", color: "#FFFFFF" }}
+                >
+                  <span style={{ fontSize: 15 }}>🖨</span>
+                  Imprimer les macarons
+                </button>
+                <button
+                  onClick={downloadMacaronsPdf}
+                  disabled={macaronSelected.length === 0 || macaronPdfGenerating}
+                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-40"
+                  style={{ background: "#FFFFFF", color: "#23324D", border: "1px solid #C9D6E3" }}
+                >
+                  {macaronPdfGenerating ? <span className="spin-icon" style={{ fontSize: 15 }}>⟳</span> : <span style={{ fontSize: 15 }}>⬇</span>}
+                  {macaronPdfGenerating ? "Génération…" : "Télécharger en PDF"}
+                </button>
+              </div>
+              {macaronPdfError && (
+                <p className="text-xs mt-2" style={{ color: "#B94A3F" }}>{macaronPdfError}</p>
               )}
             </div>
           )}
@@ -1178,7 +1363,7 @@ function TimetableApp() {
       </div>
 
       {/* Print-only content */}
-      <div className="print-only">
+      <div className="print-only-schedule">
         {printPairs.map((group, idx) => {
           const items = [];
           group.forEach((cls, i) => {
@@ -1194,6 +1379,15 @@ function TimetableApp() {
               {items}
             </div>
           );
+        })}
+      </div>
+
+      {/* Macarons-only content */}
+      <div className="print-only-macarons">
+        {macaronSelected.map((id) => {
+          const cls = classes.find((c) => c.id === id);
+          if (!cls) return null;
+          return renderMacaron(cls, getEstFor(cls));
         })}
       </div>
     </div>
