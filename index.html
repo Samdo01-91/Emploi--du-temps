@@ -584,6 +584,15 @@ function TimetableApp() {
     setPrintSelected((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   }
 
+  function togglePrintGroup(ids, allChecked) {
+    setPrintSelected((prev) => {
+      if (allChecked) return prev.filter((id) => !ids.includes(id));
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }
+
   function exportBackup() {
     const data = {
       subjects, timeSlots, days, establishments, activeEstablishmentId,
@@ -687,9 +696,25 @@ function TimetableApp() {
   const printPairs = [];
   {
     const selectedClasses = classes.filter((c) => printSelected.includes(c.id));
-    for (let i = 0; i < selectedClasses.length; i += 3) {
-      printPairs.push(selectedClasses.slice(i, i + 3));
-    }
+    // Regroupe d'abord par promotion (dans l'ordre d'apparition), puis
+    // découpe chaque groupe en pages de 3 : deux promotions différentes ne
+    // se retrouvent donc jamais sur la même page.
+    const groups = {};
+    const order = [];
+    selectedClasses.forEach((c) => {
+      const key = (c.promotion || "").trim() || "Sans promotion";
+      if (!groups[key]) {
+        groups[key] = [];
+        order.push(key);
+      }
+      groups[key].push(c);
+    });
+    order.forEach((key) => {
+      const group = groups[key];
+      for (let i = 0; i < group.length; i += 3) {
+        printPairs.push(group.slice(i, i + 3));
+      }
+    });
   }
 
   function getEstFor(cls) {
@@ -936,19 +961,33 @@ function TimetableApp() {
             <div className="mb-6 rounded-xl p-5" style={{ background: "#FFFFFF", border: "1px solid #C9D6E3" }}>
               <h3 className="font-display text-lg mb-1" style={{ color: "#23324D" }}>Imprimer les emplois du temps</h3>
               <p className="text-xs mb-3" style={{ color: "#5B6B85" }}>
-                Classes de « {activeEstablishment.name || "cet établissement"} ». Les classes cochées sont regroupées trois par trois sur chaque page (à découper) ; s'il en manque, la dernière page en a moins de trois.
+                Classes de « {activeEstablishment.name || "cet établissement"} », regroupées par promotion. Chaque page imprimée réunit jusqu'à 3 classes d'une même promotion, jamais deux promotions différentes.
               </p>
-              <div className="flex flex-col gap-1.5 mb-4">
-                {establishmentClasses.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "#23324D" }}>
-                    <input
-                      type="checkbox"
-                      checked={printSelected.includes(c.id)}
-                      onChange={() => togglePrintClass(c.id)}
-                    />
-                    {c.name}
-                  </label>
-                ))}
+              <div className="flex flex-col gap-3 mb-4">
+                {classesByPromotion.map((group) => {
+                  const ids = group.items.map((c) => c.id);
+                  const allChecked = ids.length > 0 && ids.every((id) => printSelected.includes(id));
+                  return (
+                    <div key={group.promotion}>
+                      <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide cursor-pointer mb-1" style={{ color: "#9AA7BD" }}>
+                        <input type="checkbox" checked={allChecked} onChange={() => togglePrintGroup(ids, allChecked)} />
+                        {group.promotion}
+                      </label>
+                      <div className="flex flex-col gap-1.5 pl-1">
+                        {group.items.map((c) => (
+                          <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "#23324D" }}>
+                            <input
+                              type="checkbox"
+                              checked={printSelected.includes(c.id)}
+                              onChange={() => togglePrintClass(c.id)}
+                            />
+                            {c.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
