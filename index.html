@@ -321,6 +321,7 @@ function TimetableApp() {
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("idle");
   const [panelOpen, setPanelOpen] = useState(false);
+  const [classSwitcherOpen, setClassSwitcherOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printSelected, setPrintSelected] = useState(["c1"]);
   const [macaronOpen, setMacaronOpen] = useState(false);
@@ -338,6 +339,7 @@ function TimetableApp() {
 
   const saveTimer = useRef(null);
   const importInputRef = useRef(null);
+  const classSwitcherRef = useRef(null);
   const [importStatus, setImportStatus] = useState(null);
   const firstLoad = useRef(true);
 
@@ -404,6 +406,21 @@ function TimetableApp() {
     }, 600);
     return () => clearTimeout(saveTimer.current);
   }, [subjects, timeSlots, days, establishments, activeEstablishmentId, classes, activeClassId, schedules, printSelected, loaded]);
+
+  useEffect(() => {
+    if (!classSwitcherOpen) return;
+    function handleClickOutside(e) {
+      if (classSwitcherRef.current && !classSwitcherRef.current.contains(e.target)) {
+        setClassSwitcherOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [classSwitcherOpen]);
 
   const establishmentClasses = classes.filter((c) => c.estId === activeEstablishmentId);
   const activeClass = establishmentClasses.find((c) => c.id === activeClassId) || establishmentClasses[0];
@@ -1215,51 +1232,79 @@ function TimetableApp() {
             </div>
           </div>
 
-          {/* Class tabs */}
-          <div className="flex flex-wrap items-end gap-1.5 mb-0 relative z-10">
-            {establishmentClasses.map((c) => (
+          {/* Class selector — seule la classe active est affichée, pour éviter
+              de saisir par erreur dans la mauvaise classe. Les autres restent
+              accessibles à tout moment via ce menu. */}
+          <div className="relative z-10 mb-0" ref={classSwitcherRef}>
+            <button
+              onClick={() => setClassSwitcherOpen((v) => !v)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition"
+              style={{
+                background: "#FFFFFF",
+                color: "#23324D",
+                border: "1px solid #C9D6E3",
+                borderBottom: classSwitcherOpen ? "1px solid #FFFFFF" : "1px solid #C9D6E3",
+                borderTop: "2px solid #B94A3F",
+                borderTopLeftRadius: 8,
+                borderTopRightRadius: 8,
+                marginBottom: -1,
+              }}
+            >
+              <span>{activeClass ? activeClass.name : "Aucune classe"}</span>
+              <span style={{ fontSize: 13, display: "inline-block", transform: classSwitcherOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▼</span>
+            </button>
+
+            {classSwitcherOpen && (
               <div
-                key={c.id}
-                onClick={() => setActiveClassId(c.id)}
-                className="group flex items-center gap-1.5 px-4 py-2.5 cursor-pointer text-sm font-semibold transition"
-                style={{
-                  background: c.id === activeClassId ? "#FFFFFF" : "#E9EDF1",
-                  color: c.id === activeClassId ? "#23324D" : "#5B6B85",
-                  borderTop: c.id === activeClassId ? "2px solid #B94A3F" : "2px solid transparent",
-                  border: "1px solid #C9D6E3",
-                  borderBottom: c.id === activeClassId ? "1px solid #FFFFFF" : "1px solid #C9D6E3",
-                  borderTopLeftRadius: 8,
-                  borderTopRightRadius: 8,
-                  marginBottom: -1,
-                }}
+                className="absolute left-0 mt-1 rounded-lg overflow-hidden shadow-lg"
+                style={{ background: "#FFFFFF", border: "1px solid #C9D6E3", width: 260, zIndex: 30 }}
               >
-                <span>{c.name}</span>
-                {establishmentClasses.length > 1 && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeClass(c.id); }}
-                    className="opacity-0 group-hover:opacity-100 transition"
-                    style={{ color: "#B94A3F" }}
-                    aria-label={`Supprimer la classe ${c.name}`}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>×</span>
+                <div className="max-h-64 overflow-y-auto">
+                  {establishmentClasses.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => { setActiveClassId(c.id); setClassSwitcherOpen(false); }}
+                      className="group flex items-center justify-between gap-2 px-3 py-2.5 text-sm cursor-pointer"
+                      style={{
+                        background: c.id === activeClassId ? "#F0F4F8" : "transparent",
+                        color: "#23324D",
+                        fontWeight: c.id === activeClassId ? 600 : 400,
+                      }}
+                    >
+                      <span>{c.name}</span>
+                      {establishmentClasses.length > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeClass(c.id); }}
+                          className="opacity-0 group-hover:opacity-100 transition flex-shrink-0"
+                          style={{ color: "#B94A3F" }}
+                          aria-label={`Supprimer la classe ${c.name}`}
+                        >
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>×</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {establishmentClasses.length === 0 && (
+                    <p className="px-3 py-2.5 text-xs" style={{ color: "#9AA7BD" }}>Aucune classe pour l'instant.</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 p-2" style={{ borderTop: "1px solid #E3E8EF" }}>
+                  <input
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addClass(); }}
+                    placeholder="Nouvelle classe"
+                    className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg outline-none"
+                    style={{ border: "1px solid #C9D6E3", background: "#FFFFFF", color: "#23324D" }}
+                  />
+                  <button onClick={addClass} className="p-1.5 rounded-lg flex-shrink-0" style={{ background: "#23324D", color: "#FFFFFF" }} aria-label="Ajouter une classe">
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>+</span>
                   </button>
-                )}
+                </div>
               </div>
-            ))}
-            <div className="flex items-center gap-1 pb-0.5 ml-1">
-              <input
-                value={newClassName}
-                onChange={(e) => setNewClassName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addClass(); }}
-                placeholder="Nouvelle classe (ex : 5ème B)"
-                className="text-sm px-2 py-2 rounded-lg outline-none"
-                style={{ border: "1px solid #C9D6E3", background: "#FFFFFF", color: "#23324D", width: 180 }}
-              />
-              <button onClick={addClass} className="p-2 rounded-lg" style={{ background: "#23324D", color: "#FFFFFF" }} aria-label="Ajouter une classe">
-                <span style={{ fontSize: 14, fontWeight: 700 }}>+</span>
-              </button>
-            </div>
+            )}
           </div>
+
 
           {/* Grid */}
           <div
